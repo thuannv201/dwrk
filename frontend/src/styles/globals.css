@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Segoe UI", "Inter", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--foreground);
+  --color-muted: var(--secondary);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --color-success: var(--success);
+  --radius-sm: 0.3rem;
+  --radius-md: 0.4rem;
+  --radius-lg: 0.6rem;
+  --radius-xl: 0.8rem;
+}
+
+@font-face {
+  font-family: Inter;
+  src: url('/Inter-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --background: #f5f7f9;
+  --foreground: #1b2834;
+  --card: #ffffff;
+  --primary: #007f72;
+  --primary-foreground: #ffffff;
+  --secondary: #edf1f4;
+  --muted-foreground: #61717f;
+  --accent: #dcefea;
+  --border: #d4dfe5;
+  --success: #157944;
+  --destructive: #c13746;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #11171c;
+  --foreground: #e7edf2;
+  --card: #1a2127;
+  --primary: #16d5b8;
+  --primary-foreground: #052e28;
+  --secondary: #242d35;
+  --muted-foreground: #a1aeb9;
+  --accent: #193a39;
+  --border: #35414a;
+  --success: #62dc91;
+  --destructive: #ff8994;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body, #root { height: 100%; overflow: hidden; }
+  body { @apply m-0 bg-background font-sans text-sm text-foreground antialiased; }
+  button:not(:disabled), [role="tab"] { cursor: pointer; }
+  button, input, textarea, select { font: inherit; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+  }
+  ::selection { background: var(--accent); }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+}
+
+.workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.project-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.project-location { grid-column: 1; grid-row: 2; min-width: 0; }
+.project-controls { grid-column: 2; grid-row: 1 / 3; }
+
+@media (min-width: 1050px) {
+  .workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(285px, 31%); }
+  .project-detail { grid-column: 2; grid-row: 1; }
+  .workspace-content { grid-column: 1; grid-row: 1; }
+  .workspace-logs { grid-column: 1 / -1; }
+}
+
+@media (min-width: 1450px) {
+  .project-row { grid-template-columns: minmax(160px, 1fr) minmax(170px, 1fr) auto; }
+  .project-location { grid-column: 2; grid-row: 1; padding-left: 16px; border-left: 1px solid var(--border); }
+  .project-controls { grid-column: 3; grid-row: 1; }
+  .project-controls { flex-direction: row; align-items: center; gap: 12px; }
+}
+
+@media (max-width: 440px) {
+  .project-row { grid-template-columns: minmax(0, 1fr); }
+  .project-location, .project-controls { grid-column: 1; grid-row: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
