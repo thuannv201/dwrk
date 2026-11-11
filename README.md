@@ -1,61 +1,84 @@
 # DWRK — Development Workspaces
 
-App desktop Wails + Go + React để quản lý môi trường làm việc dev theo workspace. Frontend hiện có giao diện hoạt động với **mock data**, chưa điều khiển filesystem, Git, Docker, database hoặc tiến trình thật.
+App desktop Wails 3 + Go + React để quản lý môi trường phát triển local theo workspace. UI đã kết nối backend Go; cấu hình lưu trên máy, thao tác chạy/dừng sử dụng tiến trình thật.
 
-## Chạy frontend
+## Chức năng
 
-Cần Node.js 24+ và npm. Từ thư mục dự án:
+- Tạo, đổi tên, sửa thư mục và gỡ workspace/project khỏi app; không xóa thư mục dự án.
+- Chọn thư mục bằng dialog hệ thống, quét Git/worktree, Node, Java, Go và Compose; bỏ qua dependency/build và symlink/junction. Có hủy quét và cảnh báo lỗi đọc. Kết quả quét không tự tạo hoặc chạy command.
+- Project có nhiều command service/task; chỉnh lệnh, thư mục chạy tương đối, môi trường, cổng, URL và HTTP health check. Chọn riêng các service chạy cùng workspace.
+- Chạy/dừng/chạy lại, hủy task, exit code, lỗi, health check và log stdout/stderr. Windows dùng Job Object, gắn tiến trình trước khi cho chạy để quản lý đúng cây tiến trình. Không kill tiến trình lạ theo cổng/tên.
+- Lệnh dừng tùy chỉnh dùng snapshot của lần chạy, kể cả khi cấu hình đã sửa. Stop lỗi giữ trạng thái chưa xác định; nút buộc dừng chỉ áp dụng cây tiến trình thuộc app.
+- Docker Compose dùng project/files/services cụ thể; kiểm tra container, health và lấy log. Chuyển workspace chỉ quan sát, không tự `up`. Dừng dùng `stop`, không xóa volume.
+- Mở IDE, terminal, thư mục, docs và resource file/URL bằng công cụ hệ thống. Database/debug dùng shortcut hoặc IDE đã cấu hình.
+- Git chỉ đọc branch, upstream, ahead/behind và file thay đổi theo yêu cầu; không tự fetch/commit/pull/push.
+- Import/export JSON có xem trước và kiểm tra tại backend. Import tạo bản sao và remap mọi ID/tham chiếu, không ghi đè và không tự chạy. Đọc được file `dwrk-mock` từ bản UI cũ; export mới dùng schema backend.
+- Settings lưu theme, múi giờ, editor, terminal và shell. Thoát app khi còn tiến trình yêu cầu dừng rồi thoát hoặc hủy; Compose bên ngoài không bị dừng ngầm.
+
+Log giới hạn 2.000 dòng / 2 MiB mỗi run, tổng 32 MiB, dòng tối đa khoảng 8 KiB; tính cả chi phí entry để dòng trống không vượt bộ nhớ. View lấy tối đa 200 dòng của command đang chọn; hỗ trợ lọc, tìm kiếm, sao chép và xóa phần hiển thị. Log/runtime chỉ tồn tại trong phiên.
+
+## Chạy app
+
+Cần Go theo `go.mod`, Node.js 24+ trong PATH và Wails CLI 3 tương ứng dependency.
 
 ```powershell
 cd frontend
 npm ci
-npm run dev
+cd ..
+wails3 dev
 ```
 
-Mặc định: [http://127.0.0.1:9245](http://127.0.0.1:9245). Đổi port khi cần:
+Chạy riêng `npm run dev` ở `frontend` chỉ phục vụ UI; API cần host Wails. Vite mặc định dùng port 9245. Chạy bản đã build bằng `bin/dwrk.exe`.
 
-```powershell
-npm run dev -- --port 9345
+Trong app: tạo workspace → chọn thư mục → quét và chọn project → mở cấu hình project để thêm lệnh → chạy từng command. Muốn chạy nhóm, chọn service trong cấu hình workspace.
+
+Editor/terminal có executable và danh sách đối số; mỗi dòng là một đối số, `{directory}` được thay bằng đường dẫn nguyên vẹn. Ví dụ editor dùng `Code.exe` với một đối số `{directory}`. Shell nhận nguyên chuỗi command ở đối số cuối; mặc định là PowerShell trên Windows và `/bin/sh -c` trên Linux/macOS. Không đưa mật khẩu/token vào command, environment hay URL; backend không có kho credential và không tự đọc `.env` khi quét.
+
+## Cấu trúc
+
+```text
+main.go                       # Khởi tạo Wails và xử lý thoát app
+configservice.go              # CRUD, import/export và phục hồi cấu hình
+runtimeservice.go             # API command/workspace và snapshot runtime
+desktopservice.go             # Dialog, công cụ hệ thống và Git
+internal/config/              # Model, validation, JSON, revision, khóa và backup
+internal/scanner/             # Quét thư mục; không thực thi nội dung repo
+internal/runner/              # Tiến trình, Job Object/process group, log, health, Compose
+internal/tools/               # Mở IDE/terminal và Git chỉ đọc
+frontend/src/lib/model.ts     # Adapter UI giữ nguyên các trường model backend
+frontend/src/features/        # Workspace, project, settings và log
+frontend/bindings/            # Wails sinh tự động; không sửa tay
 ```
 
-Chạy trong desktop bằng `wails3 dev` ở thư mục gốc nếu đã cài Go và Wails CLI theo project. Frontend vẫn dùng Vite plugin/bindings Wails hiện có; không tạo server REST riêng.
+`frontend/src/mock` còn giữ fixture/test của bản xem cũ, không được app dùng để điều khiển state/runtime.
 
-## Chức năng mock đã có
+## Cấu hình và phục hồi
 
-- Workspace sidebar, tìm workspace/project, tạo workspace và thêm project thủ công.
-- Quét mô phỏng → chọn mục import; không thêm lại thư mục đã import và không tự chạy service.
-- Chọn project và command; panel chi tiết ở bên phải trên màn rộng, xếp dọc ở màn nhỏ.
-- Chạy/dừng/chạy lại service, chạy task build/test, chạy/dừng theo workspace và danh sách service đang chạy toàn cục.
-- Chuyển workspace giữ nguyên trạng thái service của workspace khác.
-- Dialog cấu hình project: nhiều lệnh, lệnh mặc định, thư mục, cổng, lệnh dừng, HTTP health check.
-- Log theo command: stdout/stderr, tìm kiếm, xóa hiển thị, tự động cuộn và lịch sử thao tác.
-- Dark/light/system, đồng hồ UTC+7, icon Git/thư mục, logo Devicon cục bộ.
+File nằm tại `os.UserConfigDir()/dwrk/config.json` (Windows: `%AppData%/dwrk/config.json`). Chỉ mutation thành công mới tạo config. Mỗi mutation kèm revision; khóa OS ngăn hai instance ghi đồng thời. File tạm được flush rồi thay thế, backup hợp lệ gần nhất nằm ở `config.json.bak`.
 
-Chỉ theme được ghi nhớ trong localStorage. Project, command, log và trạng thái mock trở về dữ liệu mẫu khi reload. Mọi nút mở IDE/terminal/docs/URL chỉ hiển thị thông báo mô phỏng.
+Config lỗi/phiên bản không hỗ trợ được giữ nguyên và trả lỗi. Màn hình lỗi có phục hồi backup sau khi xác nhận; bản lỗi được giữ thành `.rejected-<timestamp>`. Chưa có migration tự động cho các schema backend tương lai. Export dùng dialog lưu file native, không xuất log/runtime hay công cụ riêng của máy; giữ nguyên command/environment để người dùng kiểm tra trước khi chia sẻ.
 
-## Stack và tổ chức
-
-React 18 + TypeScript + Vite, Tailwind CSS 4, component shadcn/ui trên Radix UI, Lucide, SVG Devicon. Component shadcn được lấy từ registry Radix chính thức, điều chỉnh import và ref để tương thích React 18; giấy phép đi kèm source.
-
-- `frontend/src/app`: màn hình và kết nối state mock.
-- `frontend/src/features`: project, workspace và log.
-- `frontend/src/components/ui`: component shadcn/Radix.
-- `frontend/src/mock`: dữ liệu mẫu, reducer, validation và kiểm thử.
-- `frontend/src/styles`: Tailwind và theme tokens.
-- `frontend/bindings`: Wails sinh tự động, không sửa tay.
-
-## Build và kiểm tra
-
-Trong thư mục `frontend`:
+## Kiểm tra và build
 
 ```powershell
+go test ./...
+go vet ./...
+cd frontend
 npm test
 npm run build
+cd ..
+wails3 generate bindings -ts -i
+go build -tags production -ldflags='-H windowsgui' -o bin/dwrk.exe .
 ```
 
-Test dùng Node test runner và TypeScript stripping, không thêm test framework vào dependency. Production output nằm ở `frontend/dist`, được Go embed khi build app desktop.
+Test Compose thực tế là tùy chọn, cần Docker daemon và image `rhysd/actionlint:latest` đã có sẵn. Test không pull image, không dùng network/volume và chỉ dọn container fixture có tên ngẫu nhiên:
 
-Đã kiểm tra UI bằng Edge headless: 320, 390, 768, 1024, 1050, 1280 và 1586px; dialog/focus, lưu health check, thêm task, import/chống trùng, thêm project/workspace, scope chạy/dừng và lưu theme. Chưa kiểm thử app trong Wails WebView hoặc đo RAM/CPU thực tế.
+```powershell
+$env:DWRK_TEST_DOCKER = '1'
+go test ./internal/runner -run TestComposeIntegration -v
+```
+
+Đã kiểm tra trên Windows: lưu/backup/revision, import cũ/mới, quét, Git, task/exit code, hủy, dừng cây tiến trình độc lập, cổng bận, health HTTP và Compose start/status/health/log/stop thực tế. UI Windows đã smoke test màn hình đầu, dialog workspace/settings và picker native. Chưa chạy thực tế Linux/macOS, chưa kiểm thử mất điện hay filesystem mạng.
 
 ## Thiết kế
 
@@ -63,4 +86,3 @@ Test dùng Node test runner và TypeScript stripping, không thêm test framewor
 - [Kiến trúc frontend](docs/frontend-architecture.md)
 - [Mô hình lưu trữ và JSON mẫu](docs/data-storage.md)
 - [Thuật ngữ](CONTEXT.md)
-- [Ảnh desktop](docs/screenshots/ui-desktop.png), [mobile](docs/screenshots/ui-mobile.png), [cấu hình project](docs/screenshots/ui-settings.png)

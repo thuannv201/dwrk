@@ -2,17 +2,18 @@ import { useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Workspace } from '@/mock/model'
+import type { Workspace } from '@/lib/model'
+import { DesktopService } from '../../../bindings/changeme'
 
-export function NewWorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (workspace: Workspace) => void }) {
+export function NewWorkspaceDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (w: Workspace) => Promise<void> }) {
   const [name, setName] = useState('')
-  const [path, setPath] = useState('D:\\Projects\\')
+  const [path, setPath] = useState('')
   const [error, setError] = useState('')
-  return <Dialog open onOpenChange={open => { if (!open) onClose() }}><DialogContent><DialogHeader><DialogTitle>Workspace mới</DialogTitle><DialogDescription>Tạo workspace trong phiên mock, sau đó chọn project để import.</DialogDescription></DialogHeader>
-    <form className="space-y-5" onSubmit={event => { event.preventDefault(); if (!name.trim() || !/^(?:[a-z]:[\\/]|\\\\|\/)/i.test(path)) { setError('Nhập tên và đường dẫn tuyệt đối của workspace.'); return }; onCreate({ id: crypto.randomUUID(), name: name.trim(), rootPath: path.trim(), projects: [] }) }}>
-      <label className="block text-xs font-medium">Tên workspace<Input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Tên dự án" className="mt-2" /></label><label className="block text-xs font-medium">Thư mục gốc<Input value={path} onChange={event => setPath(event.target.value)} className="mt-2 font-mono text-xs" /></label>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Hủy</Button><Button type="submit">Tạo & chọn nội dung import</Button></DialogFooter>
+  const [busy, setBusy] = useState(false)
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }}><DialogContent><DialogHeader><DialogTitle>Workspace mới</DialogTitle><DialogDescription>Tạo workspace rồi chọn project để import. Không tự chạy command.</DialogDescription></DialogHeader>
+    <form className="space-y-5" onSubmit={async event => { event.preventDefault(); if (!name.trim() || !path.trim()) { setError('Nhập tên và thư mục workspace.'); return }; setBusy(true); try { await onCreate({ id: crypto.randomUUID(), name: name.trim(), rootPath: path, projects: [], startCommandIds: [], resources: [] }) } catch (e) { setError(String(e)) } finally { setBusy(false) } }}>
+      <label className="block text-xs">Tên workspace<Input autoFocus className="mt-2" value={name} onChange={e => setName(e.target.value)} /></label><label className="block text-xs">Thư mục gốc<div className="mt-2 flex gap-2"><Input value={path} onChange={e => setPath(e.target.value)} /><Button type="button" variant="outline" onClick={async () => { try { const path = await DesktopService.PickDirectory(); if (path) setPath(path) } catch (e) { setError(String(e)) } }}>Chọn thư mục</Button></div></label>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Hủy</Button><Button disabled={busy}>Tạo & import project</Button></DialogFooter>
     </form>
   </DialogContent></Dialog>
 }

@@ -1,5 +1,7 @@
 # DWRK — thiết kế chức năng
 
+Cập nhật triển khai: các luồng chính đã nối backend Go, gồm lưu/import/export config, quét, command/task/log/health, Git chỉ đọc, mở công cụ và Compose. Các đoạn ghi “bản mock” bên dưới mô tả bản xem giao diện ban đầu; xem README cho trạng thái và kiểm thử hiện tại.
+
 ## Mục tiêu và quyết định đã chốt
 
 Trung tâm làm việc cho một dev trên máy cá nhân: giảm thao tác mở dự án, chạy/dừng môi trường và tìm log khi làm nhiều dự án có công nghệ khác nhau.

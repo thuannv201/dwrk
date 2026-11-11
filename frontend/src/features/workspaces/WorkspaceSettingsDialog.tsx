@@ -1,0 +1,25 @@
+import { useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { commandsIn, type Workspace } from '@/lib/model'
+import { DesktopService } from '../../../bindings/changeme'
+
+export function WorkspaceSettingsDialog({ workspace, onClose, onSave, onRemove }: { workspace: Workspace; onClose: () => void; onSave: (w: Workspace) => Promise<void>; onRemove: () => Promise<void> }) {
+  const [draft, setDraft] = useState(() => structuredClone(workspace))
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  async function save(remove = false) { setBusy(true); setError(''); try { if (remove) await onRemove(); else await onSave(draft) } catch (e) { setError(String(e)) } finally { setBusy(false) } }
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Cấu hình workspace</DialogTitle><DialogDescription>Chọn service chạy cùng workspace, quản lý project và tài liệu/liên kết.</DialogDescription></DialogHeader>
+    <label className="text-xs">Tên workspace<Input className="mt-2" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
+    <label className="text-xs">Thư mục gốc<div className="mt-2 flex gap-2"><Input value={draft.rootPath} onChange={e => setDraft({ ...draft, rootPath: e.target.value })} /><Button variant="outline" onClick={async () => { try { const path = await DesktopService.PickDirectory(); if (path) setDraft({ ...draft, rootPath: path }) } catch (e) { setError(String(e)) } }}>Chọn</Button></div></label>
+    <fieldset className="space-y-2 rounded border p-3"><legend className="px-1 text-sm">Chạy cùng workspace</legend>{commandsIn(draft).filter(c => c.kind === 'service').map(c => <label key={c.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.startCommandIds.includes(c.id)} onChange={e => setDraft({ ...draft, startCommandIds: e.target.checked ? [...draft.startCommandIds, c.id] : draft.startCommandIds.filter(id => id !== c.id) })} />{draft.projects.find(p => p.commands.some(cmd => cmd.id === c.id))?.name} / {c.name}</label>)}</fieldset>
+    <div className="space-y-2">{draft.projects.map(p => <div key={p.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm"><span>{p.name}</span><Button variant="ghost" size="icon-sm" aria-label={`Gỡ project ${p.name}`} onClick={() => setDraft({ ...draft, projects: draft.projects.filter(item => item.id !== p.id), startCommandIds: draft.startCommandIds.filter(id => !p.commands.some(c => c.id === id)) })}><Trash2 /></Button></div>)}</div>
+    <div className="space-y-3"><div className="flex items-center justify-between"><p className="text-sm">Tài liệu, database và liên kết</p><Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, resources: [...draft.resources, { id: crypto.randomUUID(), name: '', kind: 'url', target: '' }] })}><Plus />Thêm</Button></div>{draft.resources.map(r => <div key={r.id} className="grid gap-2 rounded border p-3"><div className="flex gap-2"><Input aria-label="Tên tài nguyên" placeholder="Tên: Database, Docs…" value={r.name} onChange={e => setDraft({ ...draft, resources: draft.resources.map(item => item.id === r.id ? { ...item, name: e.target.value } : item) })} /><select aria-label="Loại tài nguyên" className="rounded border bg-background px-2 text-xs" value={r.kind} onChange={e => setDraft({ ...draft, resources: draft.resources.map(item => item.id === r.id ? { ...item, kind: e.target.value } : item) })}><option value="url">URL</option><option value="file">File</option><option value="directory">Thư mục</option></select><Button variant="ghost" size="icon" aria-label="Gỡ tài nguyên" onClick={() => setDraft({ ...draft, resources: draft.resources.filter(item => item.id !== r.id) })}><Trash2 /></Button></div><Input aria-label="Đường dẫn hoặc URL" placeholder="Đường dẫn tuyệt đối hoặc HTTP/HTTPS URL" value={r.target} onChange={e => setDraft({ ...draft, resources: draft.resources.map(item => item.id === r.id ? { ...item, target: e.target.value } : item) })} /></div>)}</div>
+    <p className="text-xs text-muted-foreground">Gỡ khỏi app chỉ xóa cấu hình. Thư mục và file trên đĩa được giữ nguyên.</p>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    <DialogFooter><Button variant="destructive" disabled={busy} onClick={() => confirmRemove ? void save(true) : setConfirmRemove(true)}>{confirmRemove ? 'Xác nhận gỡ workspace' : 'Gỡ workspace'}</Button><Button variant="outline" disabled={busy} onClick={onClose}>Hủy</Button><Button disabled={busy} onClick={() => void save()}>Lưu</Button></DialogFooter>
+  </DialogContent></Dialog>
+}

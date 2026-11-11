@@ -9,7 +9,7 @@ import type {} from "../github.com/wailsapp/wails/v3/internal/eventdata.js";
 import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 
 /**
- * Name of the custom event "time".
+ * Name of the custom event "app:close-requested".
  */
-export const Time = "time";
+export const AppCloseRequested = "app:close-requested";
 

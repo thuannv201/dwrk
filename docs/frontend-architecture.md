@@ -1,5 +1,7 @@
 # Frontend DWRK — cấu trúc và lựa chọn UI
 
+Cập nhật triển khai: App đã dùng ConfigService, RuntimeService và DesktopService qua bindings Wails. Model Go được chuyển sang view model tại src/lib/model.ts; dữ liệu mock chỉ còn phục vụ test cũ. Runtime được lấy tuần tự, chỉ mang log của command đang chọn; subscription sự kiện thoát app được dọn khi unmount. Các mô tả “chưa nối backend” bên dưới là bối cảnh của bản thiết kế ban đầu.
+
 ## Stack đã chọn
 
 Giữ React + TypeScript + Vite hiện có. Chọn **shadcn/ui + Radix UI + Tailwind CSS** theo yêu cầu người dùng. shadcn cung cấp mã nguồn component có thể tùy biến; Radix xử lý hành vi và accessibility cho các thành phần như Dialog, AlertDialog, DropdownMenu, Tabs và Select; Tailwind dùng cho style và responsive. Dùng CSS variables cho theme, CSS Grid/container queries cho bố cục, Lucide cho thao tác và SVG Devicon đóng gói cục bộ cho công nghệ.

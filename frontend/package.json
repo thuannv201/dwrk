@@ -8,7 +8,7 @@
     "build:dev": "tsc && vite build --minify false --mode development",
     "build": "tsc && vite build --mode production",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/mock/model.test.ts"
+    "test": "node --experimental-strip-types --test src/mock/model.test.ts src/lib/model.test.ts"
   },
   "dependencies": {
     "@wailsio/runtime": "3.0.0",

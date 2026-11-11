@@ -5,49 +5,50 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { validateProject, type Command, type Project } from '@/mock/model'
+import { validateProject, type Command, type Project } from '@/lib/model'
 
-export function ProjectSettingsDialog({ project, runningCommandIds, onClose, onSave }: { project: Project; runningCommandIds: string[]; onClose: () => void; onSave: (project: Project) => void }) {
+export function ProjectSettingsDialog({ project, runningCommandIds, onClose, onSave }: { project: Project; runningCommandIds: string[]; onClose: () => void; onSave: (project: Project) => Promise<void> }) {
   const [draft, setDraft] = useState(() => structuredClone(project))
-  const [commandId, setCommandId] = useState(project.primaryCommandId)
+  const [commandId, setCommandId] = useState(project.primaryCommandId || project.commands[0]?.id || '')
+  const [environment, setEnvironment] = useState<Record<string, string>>(() => Object.fromEntries(project.commands.map(c => [c.id, Object.entries(c.environment ?? {}).map(([k, v]) => `${k}=${v}`).join('\n')])))
   const [error, setError] = useState('')
-  const command = draft.commands.find(item => item.id === commandId)!
-  const commandRunning = runningCommandIds.includes(commandId)
-  function updateCommand(values: Partial<Command>) { setDraft(previous => ({ ...previous, commands: previous.commands.map(item => item.id === commandId ? { ...item, ...values } : item) })) }
-  function addCommand() {
-    const id = crypto.randomUUID()
-    setDraft(previous => ({ ...previous, commands: [...previous.commands, { id, name: `Lệnh ${previous.commands.length + 1}`, kind: 'task', run: '' }] }))
-    setCommandId(id)
+  const [busy, setBusy] = useState(false)
+  const command = draft.commands.find(c => c.id === commandId)
+  const active = runningCommandIds.includes(commandId)
+  function update(values: Partial<Command>) { setDraft({ ...draft, commands: draft.commands.map(c => c.id === commandId ? { ...c, ...values } : c) }) }
+  function add() { const id = crypto.randomUUID(); setDraft({ ...draft, primaryCommandId: draft.primaryCommandId || id, commands: [...draft.commands, { id, name: `Lệnh ${draft.commands.length + 1}`, kind: 'task', run: '', workingDirectory: '.', environment: {} }] }); setCommandId(id) }
+  function remove() { const commands = draft.commands.filter(c => c.id !== commandId); setDraft({ ...draft, commands, primaryCommandId: draft.primaryCommandId === commandId ? commands[0]?.id ?? '' : draft.primaryCommandId }); setCommandId(commands[0]?.id ?? '') }
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); setError('')
+    try {
+      const next = { ...draft, commands: draft.commands.map(c => {
+        const values: Record<string, string> = {}
+        for (const line of (environment[c.id] ?? '').split('\n').filter(line => line.trim())) { const index = line.indexOf('='); if (index < 1) throw new Error('Mỗi biến môi trường cần dạng KEY=VALUE.'); const key = line.slice(0, index).trim(); if (key in values) throw new Error('Biến môi trường bị trùng.'); values[key] = line.slice(index + 1) }
+        return { ...c, environment: values }
+      }) }
+      const message = validateProject(next); if (message) throw new Error(message)
+      setBusy(true); await onSave(next)
+    } catch (e) { setError(String(e)) } finally { setBusy(false) }
   }
-  function removeCommand() {
-    const remaining = draft.commands.filter(item => item.id !== commandId)
-    setDraft({ ...draft, commands: remaining, primaryCommandId: draft.primaryCommandId === commandId ? remaining[0].id : draft.primaryCommandId })
-    setCommandId(remaining[0].id)
-  }
-  return <Dialog open onOpenChange={open => { if (!open) onClose() }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
-    <DialogHeader><DialogTitle>Cấu hình project</DialogTitle><DialogDescription>Sửa lệnh và health check cho {project.name}. Thay đổi chỉ lưu trong phiên mock, không chạy lệnh thật.</DialogDescription></DialogHeader>
-    <form onSubmit={event => { event.preventDefault(); const message = validateProject(draft); if (message) { setError(message); return }; onSave(draft) }} className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2"><label className="space-y-2 text-xs font-medium">Tên project<Input value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="mt-2" /></label><label className="space-y-2 text-xs font-medium">Thư mục làm việc<Input value={draft.directory} onChange={event => setDraft({ ...draft, directory: event.target.value })} className="mt-2 font-mono text-xs" /></label></div>
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-secondary/30 p-3"><label className="min-w-0 flex-1 text-xs font-medium">Chọn lệnh<select value={commandId} onChange={event => setCommandId(event.target.value)} className="mt-2 block h-9 w-full rounded-md border bg-background px-2 text-sm">{draft.commands.map(item => <option key={item.id} value={item.id}>{item.name || 'Chưa đặt tên'}</option>)}</select></label><Button type="button" variant="outline" onClick={addCommand}><Plus />Thêm lệnh</Button><Button type="button" variant="ghost" size="icon" aria-label="Xóa lệnh đang chọn" disabled={draft.commands.length === 1 || commandRunning} onClick={removeCommand}><Trash2 /></Button></div>
-      <Tabs defaultValue="command" className="gap-4"><TabsList><TabsTrigger value="command">Lệnh thực thi</TabsTrigger><TabsTrigger value="health">Health check</TabsTrigger></TabsList>
-        {commandRunning && <p className="text-xs text-muted-foreground">Dừng service trước khi xóa lệnh hoặc đổi sang loại task.</p>}
-        <TabsContent value="command" className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-medium">Tên lệnh<Input value={command.name} onChange={event => updateCommand({ name: event.target.value })} className="mt-2" /></label><label className="text-xs font-medium">Loại lệnh<select disabled={commandRunning} value={command.kind} onChange={event => updateCommand({ kind: event.target.value as Command['kind'], ...(event.target.value === 'task' ? { healthCheck: undefined, port: undefined, stop: undefined } : {}) })} className="mt-2 block h-9 w-full rounded-md border bg-background px-2"><option value="service">Service — chạy liên tục</option><option value="task">Task — build / test</option></select></label></div>
-          <label className="block text-xs font-medium">Lệnh chạy<Textarea value={command.run} onChange={event => updateCommand({ run: event.target.value })} rows={3} className="mt-2 font-mono text-xs" placeholder="npm run dev hoặc .\mvnw.cmd spring-boot:run" /></label>
-          {command.kind === 'service' && <div className="grid items-start gap-4 sm:grid-cols-[1fr_120px]"><label className="text-xs font-medium">Lệnh dừng (tùy chọn)<Textarea value={command.stop ?? ''} onChange={event => updateCommand({ stop: event.target.value })} rows={2} className="mt-2 font-mono text-xs" placeholder="Trống: dừng cây tiến trình do app tạo" /></label><label className="text-xs font-medium">Cổng<Input type="number" min={1} max={65535} value={command.port ?? ''} onChange={event => updateCommand({ port: event.target.value === '' ? undefined : Number(event.target.value) })} className="mt-2" /></label></div>}
-          <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.primaryCommandId === commandId} onChange={() => setDraft({ ...draft, primaryCommandId: commandId })} />Dùng làm lệnh mặc định của project</label>
-          <p className="text-xs leading-5 text-muted-foreground">Profile Spring có thể thêm vào lệnh bằng tham số phù hợp, ví dụ <code>-Dspring-boot.run.profiles=local</code>. Lưu cấu hình không tự chạy lại service.</p>
-        </TabsContent>
-        <TabsContent value="health" className="space-y-4">
-          {command.kind === 'task' ? <p className="rounded-md border p-4 text-sm text-muted-foreground">Health check dành cho service. Task build/test được kiểm tra bằng kết quả và exit code.</p> : <>
-            <label className="flex items-center justify-between rounded-lg border p-3 text-sm">Bật HTTP health check<Switch checked={!!command.healthCheck} onCheckedChange={enabled => updateCommand({ healthCheck: enabled ? { url: `http://localhost:${command.port ?? 8080}/actuator/health`, intervalMs: 10000, timeoutMs: 2000, expectedStatus: 200 } : undefined })} aria-label="Bật health check" /></label>
-            {command.healthCheck && <><label className="block text-xs font-medium">URL · HTTP GET<Input value={command.healthCheck.url} onChange={event => updateCommand({ healthCheck: { ...command.healthCheck!, url: event.target.value } })} className="mt-2 font-mono text-xs" placeholder="http://localhost:8080/actuator/health" /></label><div className="grid grid-cols-1 gap-4 sm:grid-cols-3"><label className="text-xs font-medium">Chu kỳ (ms)<Input type="number" min={1000} value={command.healthCheck.intervalMs} onChange={event => updateCommand({ healthCheck: { ...command.healthCheck!, intervalMs: Number(event.target.value) } })} className="mt-2" /></label><label className="text-xs font-medium">Timeout (ms)<Input type="number" min={100} value={command.healthCheck.timeoutMs} onChange={event => updateCommand({ healthCheck: { ...command.healthCheck!, timeoutMs: Number(event.target.value) } })} className="mt-2" /></label><label className="text-xs font-medium">HTTP status<Input type="number" min={200} max={299} value={command.healthCheck.expectedStatus} onChange={event => updateCommand({ healthCheck: { ...command.healthCheck!, expectedStatus: Number(event.target.value) } })} className="mt-2" /></label></div></>}
-          </>}
-        </TabsContent>
-      </Tabs>
-      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Hủy</Button><Button type="submit"><Save />Lưu cấu hình</Button></DialogFooter>
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose() }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Cấu hình project</DialogTitle><DialogDescription>Cấu hình được lưu trên máy. Lưu không tự chạy hoặc khởi động lại command.</DialogDescription></DialogHeader>
+    <form onSubmit={save} className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs">Tên project<Input className="mt-2" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label><label className="text-xs">Thư mục project<Input className="mt-2 font-mono text-xs" value={draft.directory} onChange={e => setDraft({ ...draft, directory: e.target.value })} /></label></div>
+      <div className="flex flex-wrap gap-2"><select aria-label="Chọn lệnh" className="min-w-0 flex-1 rounded border bg-background px-2" value={commandId} onChange={e => setCommandId(e.target.value)}>{!command && <option value="">Chưa có command</option>}{draft.commands.map(c => <option key={c.id} value={c.id}>{c.name || 'Chưa đặt tên'}</option>)}</select><Button type="button" variant="outline" onClick={add}><Plus />Thêm lệnh</Button><Button type="button" variant="ghost" size="icon" disabled={!command || active} aria-label="Xóa lệnh đang chọn" onClick={remove}><Trash2 /></Button></div>
+      {command && <>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs">Tên lệnh<Input className="mt-2" value={command.name} onChange={e => update({ name: e.target.value })} /></label><label className="text-xs">Loại lệnh<select disabled={active} className="mt-2 block h-9 w-full rounded border bg-background px-2" value={command.kind} onChange={e => update({ kind: e.target.value as Command['kind'], driver: e.target.value === 'service' ? 'process' : undefined, compose: undefined, healthCheck: undefined, port: undefined, ports: [], stop: undefined, url: undefined })}><option value="service">Service — chạy liên tục</option><option value="task">Task — build / test</option></select></label></div>
+        {command.kind === 'service' && <label className="block text-xs">Cách chạy<select disabled={active} className="mt-2 block h-9 w-full rounded border bg-background px-2" value={command.driver ?? 'process'} onChange={e => update({ driver: e.target.value, ...(e.target.value === 'docker-compose' ? { run: '', stop: undefined, healthCheck: undefined, compose: { projectName: 'dwrk-local', files: ['compose.yaml'], services: [] } } : { compose: undefined }) })}><option value="process">Process</option><option value="docker-compose">Docker Compose</option></select></label>}
+        <label className="block text-xs">Thư mục chạy tương đối trong project<Input className="mt-2 font-mono text-xs" value={command.workingDirectory} onChange={e => update({ workingDirectory: e.target.value })} placeholder="." /></label>
+        {command.driver === 'docker-compose' && command.compose ? <div className="space-y-3 rounded border p-3"><label className="block text-xs">Compose project name<Input className="mt-1" value={command.compose.projectName} onChange={e => update({ compose: { ...command.compose!, projectName: e.target.value } })} /></label><label className="block text-xs">Compose files · mỗi dòng một file tương đối<Textarea className="mt-1 font-mono text-xs" value={(command.compose.files ?? []).join('\n')} onChange={e => update({ compose: { ...command.compose!, files: e.target.value.split('\n') } })} /></label><label className="block text-xs">Services · cách nhau bằng dấu phẩy, trống là toàn bộ<Input className="mt-1" value={(command.compose.services ?? []).join(',')} onChange={e => update({ compose: { ...command.compose!, services: e.target.value ? e.target.value.split(',') : [] } })} /></label></div> : <>
+          <label className="block text-xs">Lệnh chạy<Textarea className="mt-2 font-mono text-xs" rows={3} value={command.run} onChange={e => update({ run: e.target.value })} /></label>
+          {command.kind === 'service' && <label className="block text-xs">Lệnh dừng · trống để dừng cây tiến trình do app tạo<Textarea className="mt-2 font-mono text-xs" value={command.stop ?? ''} onChange={e => update({ stop: e.target.value || undefined })} /></label>}
+        </>}
+        {command.kind === 'service' && <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs">Cổng<Input className="mt-2" type="number" min={1} max={65535} value={command.port ?? ''} onChange={e => update({ port: e.target.value ? Number(e.target.value) : undefined })} /></label><label className="text-xs">URL mở trên trình duyệt<Input className="mt-2" value={command.url ?? ''} onChange={e => update({ url: e.target.value || undefined })} /></label></div>}
+        <label className="block text-xs">Biến môi trường · mỗi dòng KEY=VALUE<Textarea className="mt-2 font-mono text-xs" value={environment[command.id] ?? ''} onChange={e => setEnvironment({ ...environment, [command.id]: e.target.value })} /></label><p className="text-xs text-muted-foreground">Không lưu mật khẩu/token ở đây. Command kế thừa môi trường của app.</p>
+        {command.kind === 'service' && command.driver !== 'docker-compose' && <div className="space-y-3 rounded border p-3"><label className="flex items-center justify-between text-sm">HTTP health check<Switch checked={!!command.healthCheck} onCheckedChange={enabled => update({ healthCheck: enabled ? { url: `http://localhost:${command.port ?? 8080}/health`, intervalMs: 10000, timeoutMs: 2000, expectedStatus: 200 } : undefined })} /></label>{command.healthCheck && <><Input aria-label="Health URL" value={command.healthCheck.url} onChange={e => update({ healthCheck: { ...command.healthCheck!, url: e.target.value } })} /><div className="grid gap-3 sm:grid-cols-3">{(['intervalMs', 'timeoutMs', 'expectedStatus'] as const).map(key => <label key={key} className="text-xs">{key}<Input type="number" className="mt-1" value={command.healthCheck![key]} onChange={e => update({ healthCheck: { ...command.healthCheck!, [key]: Number(e.target.value) } })} /></label>)}</div></>}</div>}
+        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={draft.primaryCommandId === command.id} onChange={() => setDraft({ ...draft, primaryCommandId: command.id })} />Lệnh mặc định</label>
+        {active && <p className="text-xs text-muted-foreground">Command đang hoạt động. Cấu hình mới áp dụng lần chạy sau; Stop dùng cấu hình của lần chạy hiện tại.</p>}
+      </>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Hủy</Button><Button disabled={busy}><Save />Lưu cấu hình</Button></DialogFooter>
     </form>
   </DialogContent></Dialog>
 }

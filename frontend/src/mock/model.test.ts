@@ -2,6 +2,51 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mockReducer, validateProject } from './model.ts'
 import { createMockState, importCandidates } from './data.ts'
+import { copyConfig, exportConfig, parseConfig } from './config.ts'
+
+test('config round trip imports independent copies without changing active runs', () => {
+  const initial = createMockState()
+  const text = exportConfig(initial.workspaces)
+  assert.equal('runs' in JSON.parse(text), false)
+  assert.deepEqual(parseConfig(text), initial.workspaces)
+  const copies = copyConfig(parseConfig(text))
+  const result = mockReducer(initial, { type: 'import-config', workspaces: copies })
+  assert.equal(result.workspaces.length, initial.workspaces.length * 2)
+  assert.equal(result.runs, initial.runs)
+  assert.equal(result.history, initial.history)
+  const oldIds = new Set(initial.workspaces.flatMap(w => [w.id, ...w.projects.flatMap(p => [p.id, ...p.commands.map(c => c.id)])]))
+  for (const w of copies) {
+    assert.equal(oldIds.has(w.id), false)
+    for (const p of w.projects) {
+      assert.equal(oldIds.has(p.id), false)
+      assert.ok(p.commands.some(c => c.id === p.primaryCommandId))
+      for (const c of p.commands) {
+        assert.equal(oldIds.has(c.id), false)
+        assert.equal(result.runs[c.id], undefined)
+      }
+    }
+  }
+})
+
+test('config rejects malformed data, unsupported versions and invalid projects', () => {
+  assert.throws(() => parseConfig('{'), /JSON/)
+  for (const value of [null, [], {}, { format: 'dwrk-mock', schemaVersion: 2 }]) assert.throws(() => parseConfig(JSON.stringify(value)))
+  const invalid = (edit: (workspaces: ReturnType<typeof createMockState>['workspaces']) => void) => {
+    const state = createMockState()
+    edit(state.workspaces)
+    assert.throws(() => parseConfig(exportConfig(state.workspaces)))
+  }
+  invalid(w => { w[0].projects[0].commands[0].port = 70000 })
+  invalid(w => { w[0].projects[0].commands[0].kind = 'bad' as never })
+  invalid(w => { w[0].projects[0].name = null as never })
+  invalid(w => { w[0].projects[0].primaryCommandId = 'missing' })
+  invalid(w => { w[0].projects[0].commands[0].id = w[0].id })
+  invalid(w => { w[0].projects[1].commands[0].healthCheck!.url = 'file:///secret' })
+  invalid(w => { w[0].rootPath = 'relative' })
+  assert.throws(() => parseConfig(exportConfig([])))
+  const empty = [{ id: 'empty', name: 'Empty', rootPath: '/projects', projects: [] }]
+  assert.deepEqual(parseConfig(exportConfig(empty)), empty)
+})
 
 test('stopping one workspace preserves another workspace and previous state', () => {
   const initial = createMockState(10000)

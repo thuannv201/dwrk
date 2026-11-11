@@ -149,7 +149,7 @@ Backend định nghĩa struct và validation; Wails sinh bindings/model cho fron
 
 ## Trạng thái tài liệu
 
-Đây là thiết kế dữ liệu đề xuất; mẫu JSON đã được kiểm tra cấu trúc/tham chiếu bằng assert. Chưa triển khai backend lưu trữ, JSON Schema validator, migration hoặc quản lý tiến trình. Đường dẫn, lệnh và URL ví dụ phải được người dùng xác minh cho dự án thật.
+Backend đã kết nối UI: model/validation, JSON có revision/khóa/backup, phục hồi backup có giữ bản lỗi, import/export và chuyển đổi file dwrk-mock cũ. Runtime đã có quản lý cây tiến trình Windows, task/exit code, log có giới hạn, HTTP health và Docker Compose có xác minh container. Windows lưu file bằng MoveFileEx với replace/write-through; Linux/macOS dùng rename. Test chạy trên Windows, gồm Compose thực tế với fixture riêng; chưa kiểm chứng mất điện, filesystem mạng hoặc chạy thực tế Linux/macOS. Schema backend chưa hỗ trợ được giữ nguyên và trả lỗi; chưa có migration tự động cho phiên bản backend tương lai. Đường dẫn, lệnh và URL ví dụ phải được người dùng xác minh cho dự án thật.
 
 ## Mẫu cấu hình minh họa
 

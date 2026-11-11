@@ -4,7 +4,7 @@ import go from '@/assets/technologies/go.svg'
 import docker from '@/assets/technologies/docker.svg'
 import java from '@/assets/technologies/java.svg'
 import typescript from '@/assets/technologies/typescript.svg'
-import type { Project } from '@/mock/model'
+import type { Project } from '@/lib/model'
 import { cn } from '@/lib/utils'
 
 const icons = { react, spring, go, docker, java, typescript }

@@ -25,6 +25,7 @@ export type Run = { status: 'running' | 'stopped' | 'succeeded'; startedAt?: num
 export type HistoryEntry = { workspaceId: string; timestamp: number; message: string }
 export type MockState = { workspaces: Workspace[]; runs: Record<string, Run>; history: HistoryEntry[] }
 export type MockAction =
+  | { type: 'import-config'; workspaces: Workspace[] }
   | { type: 'set-running'; commandIds: string[]; running: boolean; now: number; restart?: boolean }
   | { type: 'task'; commandId: string; now: number }
   | { type: 'save-project'; workspaceId: string; project: Project }
@@ -62,6 +63,7 @@ export function validateProject(project: Project): string | null {
 }
 
 export function mockReducer(state: MockState, action: MockAction): MockState {
+  if (action.type === 'import-config') return { ...state, workspaces: [...state.workspaces, ...action.workspaces] }
   if (action.type === 'add-workspace') {
     if (state.workspaces.some(w => w.id === action.workspace.id)) return state
     return { ...state, workspaces: [...state.workspaces, action.workspace] }
